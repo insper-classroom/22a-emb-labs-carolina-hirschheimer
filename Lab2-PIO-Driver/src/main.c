@@ -234,7 +234,6 @@ uint32_t _pio_get(Pio *p_pio, const pio_type_t ul_type,
 		
 void _delay_ms(int delay){
 
-
 	for (int i = 0; i < delay*(300000/2) ; i++){
 		asm("nop");
 	}
