@@ -3,10 +3,10 @@
 #include "gfx_mono_ug_2832hsweg04.h"
 #include "gfx_mono_text.h"
 #include "sysfont.h"
-
-/************************************************************************/
+#include "string.h"
+/************************/
 /* defines                                                              */
-/************************************************************************/
+/************************/
 
 // PLACA SAME70-XPLD
 #define LED_PIO           PIOC                 
@@ -51,7 +51,7 @@
 
 /**
  *  Informacoes para o RTC
- *  poderia ser extraida do __DATE__ e __TIME__
+ *  poderia ser extraida do _DATE_ e _TIME_
  *  ou ser atualizado pelo PC.
  */
 typedef struct  {
@@ -64,9 +64,9 @@ typedef struct  {
   uint32_t second;
 } calendar;
 
-/************************************************************************/
+/************************/
 /* prototype                                                            */
-/************************************************************************/
+/************************/
 void io_init(void);
 void draw_time(void);
 void pisca_led(int n, int t);
@@ -89,9 +89,9 @@ volatile char flag_rtt_alarm = 0;
 volatile char flag_rtc_alarm = 0;
 volatile char flag_rtc_count = 0;
 
-/************************************************************************/
+/************************/
 /* Handlers                                                             */
-/************************************************************************/
+/************************/
 
 /**
 * \brief Interrupt handler for the RTC. Refresh the display.
@@ -146,7 +146,7 @@ void TC0_Handler(void) {
 	**/
 	volatile uint32_t status = tc_get_status(TC0, 0);
 
-	/** Muda o estado do LED (pisca) **/
+	/* Muda o estado do LED (pisca) */
 	pin_toggle(LED_PIO, LED_PIO_IDX_MASK);  
 }
 
@@ -157,24 +157,20 @@ void TC1_Handler(void) {
 	**/
 	volatile uint32_t status = tc_get_status(TC0, 1);
 
-	/** Muda o estado do LED (pisca) **/
+	/* Muda o estado do LED (pisca) */
 	pin_toggle(OLED_1_PIO, OLED_1_PIO_IDX_MASK);  
 }
 
-void LED_init(int estado) {
-	pmc_enable_periph_clk(LED_PIO_ID);
-	pio_set_output(LED_PIO, LED_PIO_IDX_MASK, estado, 0, 0);
-};
+void TC2_Handler(void) {
+	/**
+	* Devemos indicar ao TC que a interrupção foi satisfeita.
+	* Isso é realizado pela leitura do status do periférico
+	**/
+	volatile uint32_t status = tc_get_status(TC0, 2);
 
-void OLED_1_init(int estado) {
-	pmc_enable_periph_clk(OLED_1_PIO_ID);
-	pio_set_output(OLED_1_PIO, OLED_1_PIO_IDX_MASK, estado, 0, 0);
-};
-
-void OLED_3_init(int estado) {
-	pmc_enable_periph_clk(OLED_3_PIO_ID);
-	pio_set_output(OLED_3_PIO, OLED_3_PIO_IDX_MASK, estado, 0, 0);
-};
+	/* Muda o estado do LED (pisca) */
+	pin_toggle(OLED_3_PIO, OLED_3_PIO_IDX_MASK);  
+}
 
 void pin_toggle(Pio *pio, uint32_t mask) {
 	if(pio_get_output_data_status(pio, mask))
@@ -269,24 +265,49 @@ void but_callback_1(void){
 
 
 
-/************************************************************************/
+/************************/
 /* funções                                                              */
-/************************************************************************/
+/************************/
+
+char* time_to_string(int n, char type) {
+	int retnum;
+	if (type == 'h') {
+		retnum = n % 24;
+		} else if (type == 'm' || type == 's') {
+		retnum = n % 60;
+		} else {
+		retnum = 0;
+	}
+	
+	char* retval = (char*)malloc(2 * sizeof(char));
+	
+	if (retnum <= 9) {
+		sprintf(retval, "0%d", retnum);
+		} else {
+		sprintf(retval, "%d", retnum);
+	}
+	
+	return retval;
+}
 
 void io_init(void)
 {
 
 	// Configura led
 	pmc_enable_periph_clk(LED_PIO_ID);
+	pio_set_output(LED_PIO, LED_PIO_IDX_MASK, 0, 0, 0);
 	pio_configure(LED_PIO, PIO_OUTPUT_0, LED_PIO_IDX_MASK, PIO_DEFAULT);
 	
 	pmc_enable_periph_clk(OLED_1_PIO_ID);
+	pio_set_output(OLED_1_PIO, OLED_1_PIO_IDX_MASK, 0, 0, 0);
 	pio_configure(OLED_1_PIO, PIO_OUTPUT_0, OLED_1_PIO_IDX_MASK, PIO_DEFAULT);
 	
 	pmc_enable_periph_clk(OLED_2_PIO_ID);
+	pio_set_output(OLED_2_PIO, OLED_2_PIO_IDX_MASK, 0, 0, 0);
 	pio_configure(OLED_2_PIO, PIO_OUTPUT_0, OLED_2_PIO_IDX_MASK, PIO_DEFAULT);
 	
 	pmc_enable_periph_clk(OLED_3_PIO_ID);
+	pio_set_output(OLED_3_PIO, OLED_3_PIO_IDX_MASK, 0, 0, 0);
 	pio_configure(OLED_3_PIO, PIO_OUTPUT_0, OLED_3_PIO_IDX_MASK, PIO_DEFAULT);
 	
 	// Inicializa clock do periférico PIO responsavel pelo botao
@@ -294,6 +315,8 @@ void io_init(void)
 	pmc_enable_periph_clk(BUT_PIO_1_ID);
 	pmc_enable_periph_clk(BUT_PIO_2_ID);
 	pmc_enable_periph_clk(BUT_PIO_3_ID);
+	
+	pio_set_input(BUT_PIO_1, BUT_PIO_1_IDX_MASK, PIO_DEFAULT);
 
 	// Configura PIO para lidar com o pino do botão como entrada
 	// com pull-up
@@ -361,19 +384,17 @@ int main (void)
 
   // Init OLED
 	gfx_mono_ssd1306_init();
+	pin_toggle(OLED_3_PIO, OLED_3_PIO_IDX_MASK);
 	
-	LED_init(1);
 	TC_init(TC0, ID_TC0, 0, 5);
 	tc_start(TC0, 0);
 	
-	OLED_1_init(1);
 	TC_init(TC0, ID_TC1, 1, 4);
 	tc_start(TC0, 1);
 	
 	RTT_init(4, 16, RTT_MR_ALMIEN);  
 	
 	/* Configura Leds */
-	OLED_3_init(1);
 	
 	/** Configura RTC */
 	calendar rtc_initial = {2018, 3, 19, 12, 15, 45 ,1};
@@ -382,7 +403,6 @@ int main (void)
 	
   /* Insert application code here, after the board has been initialized. */
 	while(1) {
-		
 		
 		if (flag_rtt_alarm) {
 			// Inverte sinal do LED2 e reprograma o alarme
@@ -410,19 +430,18 @@ int main (void)
 		
 		
 		if (flag_rtc_alarm) {
-			// Pisca o LED3
-			pin_toggle(OLED_3_PIO, OLED_3_PIO_IDX_MASK);
-			delay_ms(100);
-			pin_toggle(OLED_3_PIO, OLED_3_PIO_IDX_MASK);
+			TC_init(TC0, ID_TC2, 2, 4);
+			tc_start(TC0, 2);
+			flag_rtc_alarm = !flag_rtc_alarm;
 		}
 		
 		if (flag_rtc_count) {
 			gfx_mono_draw_line(0, 0, 128, 32, GFX_PIXEL_CLR);
 			uint32_t current_hour, current_min, current_sec;
 			rtc_get_time(RTC, &current_hour, &current_min, &current_sec);
-			char time_display[8];
-			sprintf(time_display, "%2d:%2d:%2d", current_hour, current_min,current_sec);
-			gfx_mono_draw_string(time_display, 25, 16, &sysfont);
+			char time_display[128];
+			sprintf(time_display, "%s:%s:%s", time_to_string(current_hour, 'h'), time_to_string(current_min, 'm'), time_to_string(current_sec, 's'));
+			gfx_mono_draw_string(time_display, 10, 10, &sysfont);
 		}
 		
 		flag_rtt_alarm=0;
